@@ -1,0 +1,184 @@
+import pymongo
+from bson.objectid import ObjectId
+import os
+import sys
+import pdb
+import nltk
+from nltk.stem.lancaster import LancasterStemmer
+stemmer = LancasterStemmer()
+import numpy as np
+import tflearn
+import tensorflow as tf
+import pickle
+
+connection = pymongo.MongoClient("mongodb://localhost:27017/")
+db = connection["sous"]
+
+recipes = db.recipe.find()
+
+ERROR_THRESHOLD = 0.25
+
+def clean_up_sentence(sentence):
+    sentence_words = nltk.word_tokenize(sentence)
+    sentence_words = [stemmer.stem(word.lower()) for word in sentence_words]
+    return sentence_words
+
+def bow(sentence, words):
+    sentence_words = clean_up_sentence(sentence)
+    bag = [0]*len(words)  
+    for s in sentence_words:
+        for i,w in enumerate(words):
+            if w == s: 
+                bag[i] = 1
+    return(np.array(bag))
+
+with tf.Graph().as_default():
+    types_data = pickle.load( open( "./../training/models/types/types", "rb" ) )
+    types_words = types_data['words']
+    types_classes = types_data['classes']
+    types_train_x = types_data['train_x']
+    types_train_y = types_data['train_y']
+
+    type_net = tflearn.input_data(shape=[None, len(types_train_x[0])])
+    type_net = tflearn.fully_connected(type_net, 8)
+    type_net = tflearn.fully_connected(type_net, 8)
+    type_net = tflearn.fully_connected(type_net, len(types_train_y[0]), activation='softmax')
+    type_net = tflearn.regression(type_net)
+
+    types_model = tflearn.DNN(type_net, tensorboard_dir='./../training/models/types/')
+    types_model.load('./../training/models/types/types.tflearn')
+
+def eval_types(sentence):
+    results = types_model.predict([bow(sentence, types_words)])[0]
+    results = [[i,r] for i,r in enumerate(results) if r > ERROR_THRESHOLD]
+    results.sort(key=lambda x: x[1], reverse=True)
+    return_list = []
+    for r in results:
+        return_list.append((types_classes[r[0]], r[1]))
+    return return_list
+
+
+
+with tf.Graph().as_default():
+    temps_data = pickle.load( open( "./../training/models/temps/temps", "rb" ) )
+    temps_words = temps_data['words']
+    temps_classes = temps_data['classes']
+    temps_train_x = temps_data['train_x']
+    temps_train_y = temps_data['train_y']
+
+    temp_net = tflearn.input_data(shape=[None, len(temps_train_x[0])])
+    temp_net = tflearn.fully_connected(temp_net, 8)
+    temp_net = tflearn.fully_connected(temp_net, 8)
+    temp_net = tflearn.fully_connected(temp_net, len(temps_train_y[0]), activation='softmax')
+    temp_net = tflearn.regression(temp_net)
+
+    temps_model = tflearn.DNN(temp_net, tensorboard_dir='./../training/models/temps/')
+    temps_model.load('./../training/models/temps/temps.tflearn')
+
+def eval_temps(sentence):
+    results = temps_model.predict([bow(sentence, temps_words)])[0]
+    results = [[i,r] for i,r in enumerate(results) if r > ERROR_THRESHOLD]
+    results.sort(key=lambda x: x[1], reverse=True)
+    return_list = []
+    for r in results:
+        return_list.append((temps_classes[r[0]], r[1]))
+    return return_list
+
+
+
+with tf.Graph().as_default():
+    courses_data = pickle.load( open( "./../training/models/courses/courses", "rb" ) )
+    courses_words = courses_data['words']
+    courses_classes = courses_data['classes']
+    courses_train_x = courses_data['train_x']
+    courses_train_y = courses_data['train_y']
+
+    courseNet = tflearn.input_data(shape=[None, len(courses_train_x[0])])
+    courseNet = tflearn.fully_connected(courseNet, 8)
+    courseNet = tflearn.fully_connected(courseNet, 8)
+    courseNet = tflearn.fully_connected(courseNet, len(courses_train_y[0]), activation='softmax')
+    courseNet = tflearn.regression(courseNet)
+
+    courses_model = tflearn.DNN(courseNet, tensorboard_dir='./../training/models/courses/')
+    courses_model.load('./../training/models/courses/courses.tflearn')
+
+def eval_courses(sentence):
+    results = courses_model.predict([bow(sentence, courses_words)])[0]
+    results = [[i,r] for i,r in enumerate(results) if r > ERROR_THRESHOLD]
+    results.sort(key=lambda x: x[1], reverse=True)
+    return_list = []
+    for r in results:
+        return_list.append((courses_classes[r[0]], r[1]))
+    return return_list
+
+
+
+with tf.Graph().as_default():
+    cusines_data = pickle.load( open( "./../training/models/cusines/cusines", "rb" ) )
+    cusines_words = cusines_data['words']
+    cusines_classes = cusines_data['classes']
+    cusines_train_x = cusines_data['train_x']
+    cusines_train_y = cusines_data['train_y']
+
+    cusineNet = tflearn.input_data(shape=[None, len(cusines_train_x[0])])
+    cusineNet = tflearn.fully_connected(cusineNet, 8)
+    cusineNet = tflearn.fully_connected(cusineNet, 8)
+    cusineNet = tflearn.fully_connected(cusineNet, len(cusines_train_y[0]), activation='softmax')
+    cusineNet = tflearn.regression(cusineNet)
+
+    cusines_model = tflearn.DNN(cusineNet, tensorboard_dir='./../training/models/cusines/')
+    cusines_model.load('./../training/models/cusines/cusines.tflearn')
+
+def eval_cusines(sentence):
+    results = cusines_model.predict([bow(sentence, cusines_words)])[0]
+    results = [[i,r] for i,r in enumerate(results) if r > ERROR_THRESHOLD]
+    results.sort(key=lambda x: x[1], reverse=True)
+    return_list = []
+    for r in results:
+        return_list.append((cusines_classes[r[0]], r[1]))
+    return return_list
+
+
+for recipe in recipes:
+    name = recipe["name"].strip()
+    steps = recipe["steps"]
+
+    eval_string = recipe["name"] + ': ' + '. '.join(list(map(lambda s: s["text"], recipe["steps"])))
+
+    print(eval_string)
+
+    type_perdiction = eval_types(eval_string)
+    if(type_perdiction and type_perdiction[0][1] > 0.25):
+        type_intent = type_perdiction[0][0]
+    else:
+        type_intent = 'n/a'
+
+    cusine_perdiction = eval_cusines(eval_string)
+    if(cusine_perdiction and cusine_perdiction[0][1] > 0.25):
+        cusine_intent = cusine_perdiction[0][0]
+    else:
+        cusine_intent = 'n/a'
+
+    course_perdiction = eval_courses(eval_string)
+    if(course_perdiction and course_perdiction[0][1] > 0.25):
+        course_intent = course_perdiction[0][0]
+    else:
+        course_intent = 'n/a'
+
+    temp_perdiction = eval_temps(eval_string)
+    if(temp_perdiction and temp_perdiction[0][1] > 0.25):
+        temp_intent = temp_perdiction[0][0]
+    else:
+        temp_intent = 'n/a'
+
+    newData = {
+        "classification": {
+            "type": type_intent,
+            "course": course_intent,
+            "cusine": cusine_intent,
+            "temp": temp_intent
+        }
+    }
+
+    print(newData)
+    db.recipe.update_one({ '_id': ObjectId(recipe["_id"])}, { '$set': newData }, upsert=False)
