@@ -1,0 +1,2 @@
+model_checkpoint_path: "/home/anfa/Projects/sous/training/models/cusines/cusines.tflearn"
+all_model_checkpoint_paths: "/home/anfa/Projects/sous/training/models/cusines/cusines.tflearn"
